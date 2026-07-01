@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space-Saving Algorithm Visualization</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #252836;
+      --border: #3a3f54;
+      --text: #e2e4ed;
+      --muted: #6b7280;
+      --hit-color: #22c55e;
+      --insert-color: #3b82f6;
+      --evict-color: #ef4444;
+      --bucket-border: #7c3aed;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      padding: 28px 32px;
+      min-height: 100vh;
+    }
+
+    h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; margin-top: 4px; margin-bottom: 24px; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 14px;
+    }
+
+    .panel-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Controls ── */
+    #controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    button {
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--border); }
+    button:disabled { opacity: 0.35; cursor: default; }
+    button.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    button.primary:hover:not(:disabled) { background: #6d28d9; }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    input[type="range"] { width: 90px; accent-color: #7c3aed; cursor: pointer; }
+    input[type="number"] {
+      width: 52px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-family: 'SF Mono', 'Fira Mono', monospace;
+      min-width: 0;
+    }
+    input[type="text"]::placeholder { color: var(--muted); }
+
+    #progress { margin-left: auto; font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+
+    /* ── Stream ── */
+    #stream-container {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 4px 2px 6px;
+      align-items: center;
+      scrollbar-width: thin;
+    }
+
+    .stream-el {
+      min-width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+      border: 2px solid transparent;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .stream-el.past   { background: var(--surface2); color: var(--muted); border-color: transparent; opacity: 0.5; }
+    .stream-el.future { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .stream-el.current { transform: scale(1.12); font-size: 1rem; }
+
+    /* ── Action banner ── */
+    #action-display {
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.9rem;
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      line-height: 1.6;
+      min-height: 46px;
+    }
+    #action-display.hit    { border-color: var(--hit-color);    background: rgba(34,197,94,0.08); }
+    #action-display.insert { border-color: var(--insert-color); background: rgba(59,130,246,0.08); }
+    #action-display.evict  { border-color: var(--evict-color);  background: rgba(239,68,68,0.08); }
+
+    /* ── Bucket list ── */
+    #bucket-container {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      overflow-x: auto;
+      padding: 4px 2px 6px;
+      min-height: 80px;
+      scrollbar-width: thin;
+    }
+
+    .head-node {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+      align-self: center;
+    }
+
+    .arrow-link {
+      display: flex;
+      align-items: center;
+      padding: 0 6px;
+      color: var(--muted);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      align-self: center;
+    }
+
+    .bucket {
+      border: 2px solid var(--bucket-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 76px;
+      flex-shrink: 0;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .bucket.active {
+      border-color: #f59e0b;
+      box-shadow: 0 0 14px rgba(245,158,11,0.25);
+    }
+
+    .bucket-label {
+      font-size: 0.66rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .bucket-counters { display: flex; flex-direction: column; gap: 5px; }
+
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .counter.c-hit    { border-color: var(--hit-color);    background: rgba(34,197,94,0.12); }
+    .counter.c-insert { border-color: var(--insert-color); background: rgba(59,130,246,0.12); }
+    .counter.c-evict  { border-color: var(--evict-color);  background: rgba(239,68,68,0.12); }
+
+    .counter-el    { font-weight: 700; font-size: 0.9rem; }
+    .counter-error { font-size: 0.7rem; color: var(--muted); }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Top-K table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    tr:last-child td { border-bottom: none; }
+    td:first-child { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+    /* ── Custom stream row ── */
+    .stream-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .empty-msg { color: var(--muted); font-size: 0.85rem; padding: 10px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Space-Saving Algorithm</h1>
+<p class="subtitle">Step-by-step visualization · Metwally et al., "Efficient Computation of Frequent and Top-k Elements in Data Streams"</p>
+
+<!-- Controls -->
+<div id="controls">
+  <button id="btn-reset">↺ Reset</button>
+  <button id="btn-step" class="primary">Step →</button>
+  <button id="btn-play">▶ Play</button>
+  <div class="ctrl-group">Speed <input type="range" id="speed" min="200" max="2000" step="100" value="900"></div>
+  <div class="ctrl-group">k =&nbsp;<input type="number" id="cap-input" min="1" max="10" value="3"></div>
+  <span id="progress">Step 0 / 0</span>
+</div>
+
+<!-- Stream panel -->
+<div class="panel">
+  <div class="panel-title">Stream</div>
+  <div id="stream-container"></div>
+  <div class="stream-input-row">
+    <input type="text" id="stream-input"
+      placeholder="Custom stream (space-separated, e.g.  A B C A D B A)">
+    <button id="btn-apply">Apply</button>
+  </div>
+</div>
+
+<!-- Action banner -->
+<div id="action-display">
+  Press <strong>Step →</strong> to process the first element, or <strong>▶ Play</strong> to run automatically.
+</div>
+
+<!-- Bucket structure panel -->
+<div class="panel">
+  <div class="panel-title">Counter Structure — bucket linked list (sorted by estimated count)</div>
+  <div id="bucket-container"></div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Active bucket</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--hit-color)"></div>Incremented (already tracked)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--insert-color)"></div>Newly inserted</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--evict-color)"></div>Evicted &amp; replaced</div>
+  </div>
+</div>
+
+<!-- Top-K table -->
+<div class="panel">
+  <div class="panel-title">Current top-k estimates</div>
+  <div id="topk-display"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────
+//  Space-Saving core (mirrors space_saving.py)
+// ─────────────────────────────────────────────────
+
+function makeBucket(val) {
+  return { val, counters: [], prev: null, next: null };
+}
+
+function insertBucketAfter(val, prev) {
+  const nb = makeBucket(val);
+  nb.next = prev.next;
+  nb.prev = prev;
+  if (prev.next) prev.next.prev = nb;
+  prev.next = nb;
+  return nb;
+}
+
+function deleteBucket(bkt) {
+  bkt.prev.next = bkt.next;
+  if (bkt.next) bkt.next.prev = bkt.prev;
+}
+
+// Remove counter from its bucket; delete bucket if it becomes empty (not head)
+function removeFromBucket(counter, head) {
+  const bkt = counter.bucket;
+  const idx = bkt.counters.indexOf(counter);
+  if (idx >= 0) bkt.counters.splice(idx, 1);
+  if (bkt.counters.length === 0 && bkt !== head) deleteBucket(bkt);
+}
+
+function addToBucket(counter, bkt) {
+  counter.bucket = bkt;
+  bkt.counters.push(counter);
+}
+
+// Move counter to bucket with value (current+1), creating it if needed
+function incrementCounter(counter, head) {
+  const curBkt = counter.bucket;
+  const nextVal = curBkt.val + 1;
+  let nextBkt;
+  if (curBkt.next && curBkt.next.val === nextVal) {
+    nextBkt = curBkt.next;
+  } else {
+    nextBkt = insertBucketAfter(nextVal, curBkt);
+  }
+  removeFromBucket(counter, head);
+  addToBucket(counter, nextBkt);
+  return nextBkt.val;
+}
+
+function offer(el, head, map, capacity) {
+  if (el in map) {
+    const counter = map[el];
+    const oldCount = counter.bucket.val;
+    const newCount = incrementCounter(counter, head);
+    return { type: 'hit', element: el, oldCount, newCount, evicted: null, error: 0 };
+  }
+
+  if (Object.keys(map).length < capacity) {
+    let bkt1 = (head.next && head.next.val === 1)
+      ? head.next
+      : insertBucketAfter(1, head);
+    const counter = { el, error: 0, bucket: null };
+    addToBucket(counter, bkt1);
+    map[el] = counter;
+    return { type: 'insert', element: el, oldCount: 0, newCount: 1, evicted: null, error: 0 };
+  }
+
+  // Evict the element in the first slot of the lowest-count bucket
+  const lowestBkt = head.next;
+  const evictedCounter = lowestBkt.counters[0];
+  const evicted = evictedCounter.el;
+  const errorVal = lowestBkt.val;
+
+  delete map[evicted];
+  evictedCounter.el = el;
+  evictedCounter.error = errorVal;
+  map[el] = evictedCounter;
+
+  const newCount = incrementCounter(evictedCounter, head);
+  return { type: 'evict', element: el, oldCount: errorVal, newCount, evicted, error: errorVal };
+}
+
+function snapshotBuckets(head) {
+  const result = [];
+  let b = head.next;
+  while (b) {
+    result.push({ val: b.val, counters: b.counters.map(c => ({ el: c.el, error: c.error })) });
+    b = b.next;
+  }
+  return result;
+}
+
+function getTopK(head, k) {
+  const result = [];
+  let b = head;
+  while (b.next) b = b.next;
+  while (b !== head && result.length < k) {
+    for (let i = b.counters.length - 1; i >= 0 && result.length < k; i--) {
+      const c = b.counters[i];
+      result.push({ el: c.el, count: b.val, error: c.error });
+    }
+    b = b.prev;
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────
+//  Simulation — build a history of snapshots
+// ─────────────────────────────────────────────────
+
+let steps = [];
+
+function buildSimulation(stream, capacity) {
+  const head = makeBucket(0);
+  const map = {};
+  steps = [{ buckets: [], action: { type: 'initial' }, topk: [], streamIndex: -1 }];
+
+  for (let i = 0; i < stream.length; i++) {
+    const action = offer(stream[i], head, map, capacity);
+    action.streamIndex = i;
+    steps.push({ buckets: snapshotBuckets(head), action, topk: getTopK(head, capacity), streamIndex: i });
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Element color palette
+// ─────────────────────────────────────────────────
+
+const PALETTE = [
+  '#f87171','#fb923c','#facc15','#4ade80',
+  '#34d399','#38bdf8','#818cf8','#e879f9',
+  '#f472b6','#a3e635','#2dd4bf','#60a5fa',
+];
+const colorCache = {};
+let colorIdx = 0;
+function elColor(el) {
+  if (!colorCache[el]) colorCache[el] = PALETTE[colorIdx++ % PALETTE.length];
+  return colorCache[el];
+}
+
+// ─────────────────────────────────────────────────
+//  Rendering
+// ─────────────────────────────────────────────────
+
+let currentStream = [];
+
+function renderStream(streamIndex) {
+  const c = document.getElementById('stream-container');
+  c.innerHTML = '';
+  currentStream.forEach((el, i) => {
+    const div = document.createElement('div');
+    const color = elColor(el);
+    if (i < streamIndex) {
+      div.className = 'stream-el past';
+    } else if (i === streamIndex) {
+      div.className = 'stream-el current';
+      div.style.background = color;
+      div.style.color = '#000';
+      div.style.borderColor = color;
+    } else {
+      div.className = 'stream-el future';
+      div.style.borderColor = color + '66';
+      div.style.color = color;
+    }
+    div.textContent = el;
+    c.appendChild(div);
+  });
+  // Scroll current element into view
+  if (streamIndex >= 0) {
+    const els = c.querySelectorAll('.stream-el');
+    if (els[streamIndex]) els[streamIndex].scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function renderBuckets(step) {
+  const c = document.getElementById('bucket-container');
+  c.innerHTML = '';
+  const { action, buckets } = step;
+
+  // HEAD sentinel
+  const headNode = document.createElement('div');
+  headNode.className = 'head-node';
+  headNode.textContent = 'HEAD';
+  c.appendChild(headNode);
+
+  if (buckets.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-msg';
+    empty.style.marginLeft = '16px';
+    empty.textContent = '(no counters yet)';
+    c.appendChild(empty);
+    return;
+  }
+
+  buckets.forEach(bkt => {
+    const arrow = document.createElement('div');
+    arrow.className = 'arrow-link';
+    arrow.textContent = '→';
+    c.appendChild(arrow);
+
+    const isActiveBkt = action.type !== 'initial' && bkt.val === action.newCount &&
+      bkt.counters.some(ct => ct.el === action.element);
+
+    const bktDiv = document.createElement('div');
+    bktDiv.className = 'bucket' + (isActiveBkt ? ' active' : '');
+
+    const label = document.createElement('div');
+    label.className = 'bucket-label';
+    label.textContent = `count = ${bkt.val}`;
+    bktDiv.appendChild(label);
+
+    const cList = document.createElement('div');
+    cList.className = 'bucket-counters';
+
+    bkt.counters.forEach(ct => {
+      const cDiv = document.createElement('div');
+      cDiv.className = 'counter';
+
+      const isHighlighted = isActiveBkt && ct.el === action.element;
+      if (isHighlighted) {
+        if (action.type === 'hit')    cDiv.classList.add('c-hit');
+        if (action.type === 'insert') cDiv.classList.add('c-insert');
+        if (action.type === 'evict')  cDiv.classList.add('c-evict');
+      }
+
+      const elSpan = document.createElement('span');
+      elSpan.className = 'counter-el';
+      elSpan.textContent = ct.el;
+      elSpan.style.color = elColor(ct.el);
+
+      const errSpan = document.createElement('span');
+      errSpan.className = 'counter-error';
+      errSpan.textContent = ct.error > 0 ? `±${ct.error}` : '';
+
+      cDiv.appendChild(elSpan);
+      cDiv.appendChild(errSpan);
+      cList.appendChild(cDiv);
+    });
+
+    bktDiv.appendChild(cList);
+    c.appendChild(bktDiv);
+  });
+}
+
+function badge(el) {
+  return `<span style="color:${elColor(el)};font-weight:700">${el}</span>`;
+}
+
+function renderAction(step) {
+  const div = document.getElementById('action-display');
+  const { action } = step;
+  div.className = action.type;
+
+  if (action.type === 'initial') {
+    div.className = '';
+    div.innerHTML = 'Press <strong>Step →</strong> to process the first element, or <strong>▶ Play</strong> to run automatically.';
+    return;
+  }
+
+  const el = badge(action.element);
+  if (action.type === 'hit') {
+    div.innerHTML = `<strong>✓ Hit</strong> &nbsp;${el} is already tracked — incremented from count <strong>${action.oldCount}</strong> → <strong>${action.newCount}</strong>`;
+  } else if (action.type === 'insert') {
+    div.innerHTML = `<strong>+ Insert</strong> &nbsp;${el} is new and there is room — added with count <strong>1</strong>, error <strong>0</strong>`;
+  } else if (action.type === 'evict') {
+    div.innerHTML = `<strong>✗ Evict</strong> &nbsp;Counters full — evicted ${badge(action.evicted)} (count ${action.oldCount}), replaced with ${el}, count <strong>${action.newCount}</strong>, error ≤ <strong>${action.error}</strong> &nbsp;<span style="color:var(--muted);font-size:0.8rem">(true count ∈ [${action.newCount - action.error}, ${action.newCount}])</span>`;
+  }
+}
+
+function renderTopK(step) {
+  const c = document.getElementById('topk-display');
+  if (step.topk.length === 0) {
+    c.innerHTML = '<div class="empty-msg">No elements tracked yet.</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>#</th><th>Element</th><th>Est. Count</th><th>Error Bound</th><th>True Count Range</th></tr></thead><tbody>';
+  step.topk.forEach((item, i) => {
+    html += `<tr>
+      <td>${i + 1}</td>
+      <td><span style="color:${elColor(item.el)};font-weight:700;font-size:1rem">${item.el}</span></td>
+      <td><strong>${item.count}</strong></td>
+      <td>${item.error}</td>
+      <td>[${item.count - item.error},&nbsp;${item.count}]</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  c.innerHTML = html;
+}
+
+function renderProgress(idx) {
+  document.getElementById('progress').textContent = `Step ${Math.max(0, idx)} / ${steps.length - 1}`;
+  document.getElementById('btn-step').disabled = idx >= steps.length - 1;
+}
+
+function renderAll(idx) {
+  if (idx < 0 || idx >= steps.length) return;
+  const step = steps[idx];
+  renderStream(step.streamIndex);
+  renderBuckets(step);
+  renderAction(step);
+  renderTopK(step);
+  renderProgress(idx);
+}
+
+// ─────────────────────────────────────────────────
+//  Playback
+// ─────────────────────────────────────────────────
+
+let currentStep = 0;
+let isPlaying = false;
+let playTimer = null;
+
+function stepForward() {
+  if (currentStep < steps.length - 1) {
+    currentStep++;
+    renderAll(currentStep);
+  }
+  if (currentStep >= steps.length - 1 && isPlaying) stopPlay();
+}
+
+function startPlay() {
+  if (currentStep >= steps.length - 1) currentStep = 0;
+  isPlaying = true;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  function tick() {
+    if (!isPlaying || currentStep >= steps.length - 1) { stopPlay(); return; }
+    stepForward();
+    const ms = 2200 - parseInt(document.getElementById('speed').value);
+    playTimer = setTimeout(tick, ms);
+  }
+  const ms = 2200 - parseInt(document.getElementById('speed').value);
+  playTimer = setTimeout(tick, ms);
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearTimeout(playTimer);
+  document.getElementById('btn-play').textContent = '▶ Play';
+}
+
+function reset() {
+  stopPlay();
+  Object.keys(colorCache).forEach(k => delete colorCache[k]);
+  colorIdx = 0;
+  const cap = Math.max(1, parseInt(document.getElementById('cap-input').value) || 3);
+  buildSimulation(currentStream, cap);
+  currentStep = 0;
+  renderAll(0);
+}
+
+// ─────────────────────────────────────────────────
+//  Event wiring
+// ─────────────────────────────────────────────────
+
+document.getElementById('btn-step').addEventListener('click', () => {
+  stopPlay();
+  stepForward();
+});
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (isPlaying) stopPlay();
+  else startPlay();
+});
+
+document.getElementById('btn-reset').addEventListener('click', reset);
+
+document.getElementById('cap-input').addEventListener('change', reset);
+
+document.getElementById('btn-apply').addEventListener('click', () => {
+  const raw = document.getElementById('stream-input').value.trim();
+  if (!raw) return;
+  const tokens = raw.split(/[\s,]+/).filter(Boolean);
+  if (tokens.length === 0) return;
+  currentStream = tokens;
+  document.getElementById('stream-input').value = '';
+  reset();
+});
+
+// ─────────────────────────────────────────────────
+//  Default stream — shows all three cases clearly
+// ─────────────────────────────────────────────────
+
+// With k=3: A/B/C fill slots → D evicts → repeated hits promote elements →
+// further evictions show error accumulation
+currentStream = 'A B C D A B A E B A C F A B A D A B C A A A B B C C A B A D'.split(' ');
+reset();
+</script>
+</body>
+</html>
