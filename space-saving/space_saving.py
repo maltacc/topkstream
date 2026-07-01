@@ -22,7 +22,7 @@ class _Counter:
         self.bkt = bkt
         self.error = err
         self.prev = self.next = None
-
+        
 class SpaceSaving: 
 
     def __init__(self, capacity: int): 
