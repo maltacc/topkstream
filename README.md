@@ -2,7 +2,7 @@
 
 It's straightforward solve for top-k elements in a running data stream.  I was interested in extracting the top-k elements in a data stream for any time window, specifically top-k elements by sum (assuming high cardinality). 
 
-To approach this, I implemented 2 approaches: 
+To approach this, I implemented 2 algorithms: 
 ### 1. Space-Saving
 **Reference:** https://www.cse.ust.hk/~raywong/comp5331/References/EfficientComputationOfFrequentAndTop-kElementsInDataStreams.pdf
 
